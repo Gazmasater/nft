@@ -3,14 +3,159 @@ package encoders
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
-	"github.com/Morwran/nft-go/internal/bytes"
 	pr "github.com/Morwran/nft-go/pkg/protocols"
 
+	"github.com/Morwran/nft-go/internal/bytes"
 	"github.com/google/nftables/expr"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 )
+
+func init() {
+	register(&expr.Numgen{}, func(e expr.Any) encoder {
+		return &numgenEncoder{numgen: e.(*expr.Numgen)}
+	})
+}
+
+type numgenEncoder struct {
+	numgen *expr.Numgen
+}
+
+func (b *numgenEncoder) EncodeIR(ctx *ctx) (irNode, error) {
+	numgen := b.numgen
+	if numgen.Register == 0 {
+		return nil, errors.Errorf("%T expression has invalid destination register %d", numgen, numgen.Register)
+	}
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("numgen %s mod %d", b.NumgenModeToString(), numgen.Modulus))
+	if numgen.Offset != 0 {
+		sb.WriteString(fmt.Sprintf(" offset %d", numgen.Offset))
+	}
+	ctx.reg.Set(regID(numgen.Register),
+		regVal{
+			HumanExpr: sb.String(),
+			Expr:      numgen,
+		})
+	return nil, ErrNoIR
+}
+
+func (b *numgenEncoder) EncodeJSON(ctx *ctx) ([]byte, error) {
+	numgen := b.numgen
+	if numgen.Register == 0 {
+		return nil, errors.Errorf("%T expression has invalid destination register %d", numgen, numgen.Register)
+	}
+	nj := map[string]interface{}{
+		"numgen": struct {
+			Mode   string `json:"mode"`
+			Mod    uint32 `json:"mod"`
+			Offset uint32 `json:"offset"`
+		}{
+			Mode:   b.NumgenModeToString(),
+			Mod:    numgen.Modulus,
+			Offset: numgen.Offset,
+		},
+	}
+	ctx.reg.Set(regID(numgen.Register), regVal{Data: nj})
+
+	return nil, ErrNoJSON
+}
+
+func (b *numgenEncoder) NumgenModeToString() string {
+	n := b.numgen
+	switch n.Type {
+	case unix.NFT_NG_INCREMENTAL:
+		return "inc"
+	case unix.NFT_NG_RANDOM:
+		return "random"
+	}
+
+	return "unknown"
+}
+
+//objref
+
+func init() {
+	register(&expr.Objref{}, func(e expr.Any) encoder {
+		return &objrefEncoder{objrerf: e.(*expr.Objref)}
+	})
+}
+
+type (
+	objrefEncoder struct {
+		objrerf *expr.Objref
+	}
+	objrefIR struct {
+		*expr.Objref
+	}
+)
+
+func (b *objrefEncoder) EncodeIR(ctx *ctx) (irNode, error) {
+	return &objrefIR{b.objrerf}, nil
+}
+
+func (b *objrefEncoder) EncodeJSON(ctx *ctx) ([]byte, error) {
+	o := b.objrerf
+	return []byte(fmt.Sprintf(`{%q:%q}`, o.Type, o.Name)), nil
+}
+
+func (o *objrefIR) Format() string {
+	sb := strings.Builder{}
+	objType := ObjType(o.Type)
+	switch objType {
+	case ObjCtHelper:
+		sb.WriteString("ct helper set ")
+	case ObjCtTimeout:
+		sb.WriteString("ct timeout set ")
+	case ObjCtExpect:
+		sb.WriteString("ct expectation set ")
+	case ObjSecMark:
+		sb.WriteString("meta secmark set ")
+	default:
+		sb.WriteString(fmt.Sprintf("%s name ", objType))
+	}
+	sb.WriteString(o.Name)
+	return sb.String()
+}
+
+type ObjType int
+
+const (
+	ObjCounter   ObjType = unix.NFT_OBJECT_COUNTER
+	ObjQuota     ObjType = unix.NFT_OBJECT_QUOTA
+	ObjCtHelper  ObjType = unix.NFT_OBJECT_CT_HELPER
+	ObjLimit     ObjType = unix.NFT_OBJECT_LIMIT
+	ObjCtTimeout ObjType = unix.NFT_OBJECT_CT_TIMEOUT
+	ObjSecMark   ObjType = unix.NFT_OBJECT_SECMARK
+	ObjSynProxy  ObjType = unix.NFT_OBJECT_SYNPROXY
+	ObjCtExpect  ObjType = unix.NFT_OBJECT_CT_EXPECT
+)
+
+func (o ObjType) String() string {
+	switch o {
+	case ObjCounter:
+		return "counter"
+	case ObjQuota:
+		return "quota"
+	case ObjCtHelper:
+		return "ct helper"
+	case ObjLimit:
+		return "limit"
+	case ObjCtTimeout:
+		return "ct timeout"
+	case ObjSecMark:
+		return "secmark"
+	case ObjSynProxy:
+		return "synproxy"
+	case ObjCtExpect:
+		return "ct expectation"
+	}
+	return "unknown"
+}
+
+//payload
 
 func init() {
 	register(&expr.Payload{}, func(e expr.Any) encoder {
@@ -217,3 +362,113 @@ func includeHeaderIfKnown(ctx *ctx) includeHeaderFlag {
 }
 
 func alwaysIncludeHeader() includeHeaderFlag { return addHeaderName }
+
+//quiue
+
+func init() {
+	register(&expr.Queue{}, func(e expr.Any) encoder {
+		return &queueEncoder{que: e.(*expr.Queue)}
+	})
+}
+
+type (
+	queueEncoder struct {
+		que *expr.Queue
+	}
+	queueIR struct {
+		*expr.Queue
+	}
+
+	QueueFlag expr.QueueFlag
+)
+
+func (b *queueEncoder) EncodeIR(ctx *ctx) (irNode, error) {
+	return &queueIR{b.que}, nil
+}
+
+func (b *queueEncoder) EncodeJSON(ctx *ctx) ([]byte, error) {
+	var flag any
+	q := b.que
+	flags := QueueFlag(q.Flag).List()
+	if len(flags) > 1 {
+		flag = flags
+	} else if len(flags) == 1 {
+		flag = flags[0]
+	}
+	que := map[string]interface{}{
+		"queue": struct {
+			Num   uint16 `json:"num,omitempty"`
+			Flags any    `json:"flags,omitempty"`
+		}{
+			Num:   q.Num,
+			Flags: flag,
+		},
+	}
+
+	return json.Marshal(que)
+}
+
+func (q *queueIR) Format() string {
+	sb := strings.Builder{}
+	total := q.Total
+	exp := strconv.Itoa(int(q.Num))
+	if total > 1 {
+		total += q.Num - 1
+		exp = fmt.Sprintf("%s-%d", exp, total)
+	}
+	sb.WriteString("queue")
+	flags := QueueFlag(q.Flag).List()
+	if len(flags) > 0 {
+		sb.WriteString(fmt.Sprintf(" flags %s", strings.Join(QueueFlag(q.Flag).List(), ",")))
+	}
+	sb.WriteString(fmt.Sprintf(" to %s", exp))
+	return sb.String()
+}
+
+func (fl QueueFlag) List() (flags []string) {
+	if fl&QueueFlag(expr.QueueFlagBypass) != 0 {
+		flags = append(flags, "bypass")
+	}
+	if fl&QueueFlag(expr.QueueFlagFanout) != 0 {
+		flags = append(flags, "fanout")
+	}
+	return flags
+}
+
+//quota
+
+func init() {
+	register(&expr.Quota{}, func(e expr.Any) encoder {
+		return &quotaEncoder{quota: e.(*expr.Quota)}
+	})
+}
+
+type quotaEncoder struct {
+	quota *expr.Quota
+}
+
+func (b *quotaEncoder) EncodeIR(ctx *ctx) (irNode, error) {
+	val, u := b.Rate()
+	return simpleIR(fmt.Sprintf("quota %s%d %s",
+		map[bool]string{true: "over ", false: ""}[b.quota.Over],
+		val, u)), nil
+}
+
+func (b *quotaEncoder) EncodeJSON(ctx *ctx) ([]byte, error) {
+	val, u := b.Rate()
+	quota := map[string]interface{}{
+		"quota": struct {
+			Val  uint64 `json:"val"`
+			Unit string `json:"val_unit"`
+		}{
+			Val:  val,
+			Unit: u,
+		},
+	}
+
+	return json.Marshal(quota)
+}
+
+func (b *quotaEncoder) Rate() (val uint64, unit string) {
+	return getRate(b.quota.Bytes)
+}
