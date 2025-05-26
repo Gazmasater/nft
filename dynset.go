@@ -33,20 +33,8 @@ func (b *dynsetEncoder) EncodeIR(ctx *ctx) (irNode, error) {
 	}
 	exp := srcRegKey.HumanExpr
 
+	// Сначала только exp и timeout
 	sb.WriteString(exp)
-	rule := *ctx.rule
-	rule.Exprs = dyn.Exprs
-
-	str, err := NewRuleExprEncoder(&rule).Format()
-	if err != nil {
-		return nil, err
-	}
-
-	if str != "" {
-		sb.WriteByte(' ')
-		sb.WriteString(str)
-	}
-
 	if dyn.Timeout != 0 {
 		sb.WriteString(fmt.Sprintf(" timeout %s", dyn.Timeout))
 	}
@@ -57,21 +45,28 @@ func (b *dynsetEncoder) EncodeIR(ctx *ctx) (irNode, error) {
 	sb.Reset()
 	setName := fmt.Sprintf(`@%s`, dyn.SetName)
 
-	sb.WriteString(fmt.Sprintf("%s %s { %s ", DynSetOP(dyn.Operation), setName, exp))
+	// Теперь готовим строку expr-выражений
+	rule := *ctx.rule
+	rule.Exprs = dyn.Exprs
+	str, err := NewRuleExprEncoder(&rule).Format()
+	if err != nil {
+		return nil, err
+	}
+
+	sb.WriteString(fmt.Sprintf("%s %s { %s", DynSetOP(dyn.Operation), setName, exp))
 	if str != "" {
+		sb.WriteString(" ")
 		sb.WriteString(str)
-		sb.WriteByte(' ')
 	}
 
 	srcRegData, ok := ctx.reg.Get(regID(dyn.SrcRegData))
-
 	if ok {
 		if exprData := srcRegData.HumanExpr; exprData != "" {
-			sb.WriteString(fmt.Sprintf(": %s ", exprData))
+			sb.WriteString(fmt.Sprintf(" : %s", exprData))
 		}
 	}
 
-	sb.WriteByte('}')
+	sb.WriteString(" }")
 
 	return simpleIR(sb.String()), nil
 }

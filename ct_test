@@ -14,6 +14,12 @@ type ctEncoderTestSuite struct {
 	suite.Suite
 }
 
+const (
+	IPPROTO_ICMP = 1
+	IPPROTO_TCP  = 6
+	IPPROTO_UDP  = 17
+)
+
 func (sui *ctEncoderTestSuite) Test_CtExprToString() {
 	testData := []struct {
 		name     string
@@ -67,7 +73,7 @@ func (sui *ctEncoderTestSuite) Test_CtExprToString() {
 					&expr.Cmp{
 						Register: 1,
 						Op:       expr.CmpOpEq,
-						Data:     []byte{byte(CtStateBitNEW | CtStateBitESTABLISHED | CtStateBitRELATED), 0, 0, 0, 0, 0, 0, 0},
+						Data:     []byte{byte(CtStateBitESTABLISHED | CtStateBitNEW | CtStateBitRELATED), 0, 0, 0, 0, 0, 0, 0},
 					},
 					&expr.Verdict{Kind: expr.VerdictAccept},
 				},
@@ -238,6 +244,61 @@ func (sui *ctEncoderTestSuite) Test_CtExprToString() {
 				},
 			},
 			expected: "ct state established ct protocol tcp accept",
+		},
+
+		{
+			name: "ct protocol tcp",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Ct{
+						Key:      expr.CtKeyPROTOCOL,
+						Register: 1,
+					},
+					&expr.Cmp{
+						Register: 1,
+						Op:       expr.CmpOpEq,
+						Data:     []byte{IPPROTO_TCP},
+					},
+					&expr.Verdict{Kind: expr.VerdictAccept},
+				},
+			},
+			expected: "ct protocol tcp accept",
+		},
+		{
+			name: "ct protocol udp",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Ct{
+						Key:      expr.CtKeyPROTOCOL,
+						Register: 1,
+					},
+					&expr.Cmp{
+						Register: 1,
+						Op:       expr.CmpOpEq,
+						Data:     []byte{IPPROTO_UDP},
+					},
+					&expr.Verdict{Kind: expr.VerdictAccept},
+				},
+			},
+			expected: "ct protocol udp accept",
+		},
+		{
+			name: "ct protocol icmp",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Ct{
+						Key:      expr.CtKeyPROTOCOL,
+						Register: 1,
+					},
+					&expr.Cmp{
+						Register: 1,
+						Op:       expr.CmpOpEq,
+						Data:     []byte{IPPROTO_ICMP},
+					},
+					&expr.Verdict{Kind: expr.VerdictAccept},
+				},
+			},
+			expected: "ct protocol icmp accept",
 		},
 	}
 
