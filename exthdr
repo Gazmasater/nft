@@ -1,0 +1,14 @@
+sudo nft add table inet test
+sudo nft add chain inet test prerouting '{ type filter hook prerouting priority 0; }'
+sudo nft add rule inet test prerouting exthdr dst exists accept
+
+
+sudo nft list ruleset
+
+
+table inet test {
+        chain prerouting {
+                type filter hook prerouting priority filter; policy accept;
+                exthdr dst exists accept
+        }
+}
