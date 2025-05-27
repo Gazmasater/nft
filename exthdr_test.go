@@ -58,7 +58,7 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrExistsAccept_WithAliases() {
 				Exprs: []expr.Any{
 					&expr.Exthdr{
 						Op:     expr.ExthdrOpIpv6,
-						Type:   135, // mh = Mobility Header
+						Type:   unix.IPPROTO_MH,
 						Offset: 0,
 						Len:    0,
 						Flags:  unix.NFT_EXTHDR_F_PRESENT,
@@ -67,6 +67,26 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrExistsAccept_WithAliases() {
 				},
 			},
 			expected: "exthdr mh exists accept",
+		},
+
+		{
+			name: "exthdr dst exists exthdr frag exists accept",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Exthdr{
+						Type:  unix.IPPROTO_DSTOPTS,
+						Flags: unix.NFT_EXTHDR_F_PRESENT,
+					},
+					&expr.Exthdr{
+						Type:  unix.IPPROTO_FRAGMENT,     // frag
+						Flags: unix.NFT_EXTHDR_F_PRESENT, // exists
+					},
+					&expr.Verdict{
+						Kind: expr.VerdictAccept,
+					},
+				},
+			},
+			expected: "exthdr dst exists exthdr frag exists accept",
 		},
 	}
 
