@@ -1,6 +1,7 @@
 package encoders
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/nftables"
@@ -13,19 +14,19 @@ type exthdrEncoderTestSuite struct {
 	suite.Suite
 }
 
-func (sui *exthdrEncoderTestSuite) Test_ExthdrDstExistsAccept() {
+func (sui *exthdrEncoderTestSuite) Test_ExthdrExistsAccept_WithAliases() {
 	testData := []struct {
 		name     string
 		exprs    nftables.Rule
 		expected string
 	}{
 		{
-			name: "exthdr dst exists accept",
+			name: "exthdr dst exists accept (alias)",
 			exprs: nftables.Rule{
 				Exprs: []expr.Any{
 					&expr.Exthdr{
 						Op:     expr.ExthdrOpIpv6,
-						Type:   60, // 60 — Destination Options Header (dst)
+						Type:   unix.IPPROTO_DSTOPTS,
 						Offset: 0,
 						Len:    0,
 						Flags:  unix.NFT_EXTHDR_F_PRESENT,
@@ -33,7 +34,23 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrDstExistsAccept() {
 					&expr.Verdict{Kind: expr.VerdictAccept},
 				},
 			},
-			expected: "ip option 60 accept",
+			expected: "exthdr dst exists accept",
+		},
+		{
+			name: "exthdr frag exists accept (alias)",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Exthdr{
+						Op:     expr.ExthdrOpIpv6,
+						Type:   unix.IPPROTO_FRAGMENT,
+						Offset: 0,
+						Len:    0,
+						Flags:  unix.NFT_EXTHDR_F_PRESENT,
+					},
+					&expr.Verdict{Kind: expr.VerdictAccept},
+				},
+			},
+			expected: "exthdr frag exists accept",
 		},
 	}
 
@@ -41,6 +58,8 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrDstExistsAccept() {
 		sui.Run(tc.name, func() {
 			str, err := NewRuleExprEncoder(&tc.exprs).Format()
 			sui.Require().NoError(err)
+			fmt.Printf("Expected=%s\n", tc.expected)
+			fmt.Printf("IR=%s\n", str)
 			sui.Require().Equal(tc.expected, str)
 		})
 	}
