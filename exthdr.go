@@ -36,7 +36,7 @@ func exthdrTypeToString(t uint8) string {
 	case 51:
 		return "auth"
 	case 135:
-		return "mobility"
+		return "mh"
 	default:
 		return fmt.Sprint(t)
 	}
