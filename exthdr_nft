@@ -1,9 +1,11 @@
 sudo nft add table inet test
 sudo nft add chain inet test prerouting '{ type filter hook prerouting priority 0; }'
 sudo nft add rule inet test prerouting exthdr dst exists accept
-sudo nft add rule ip6 test prerouting exthdr frag exists accept
-sudo nft add rule ip6 test prerouting exthdr mh exists accept
-sudo nft add rule ip6 test prerouting exthdr dst exists exthdr frag exists accept
+sudo nft add rule inet test prerouting exthdr frag exists accept
+sudo nft add rule inet test prerouting exthdr mh exists accept
+sudo nft add rule inet test prerouting exthdr dst exists exthdr frag exists accept
+sudo nft add rule inet test prerouting exthdr dst exists exthdr frag exists exthdr mh exists accept
+
 
 
 

@@ -79,7 +79,7 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrExistsAccept_WithAliases() {
 					},
 					&expr.Exthdr{
 						Type:  unix.IPPROTO_FRAGMENT,     // frag
-						Flags: unix.NFT_EXTHDR_F_PRESENT, // exists
+						Flags: unix.NFT_EXTHDR_F_PRESENT, 
 					},
 					&expr.Verdict{
 						Kind: expr.VerdictAccept,
@@ -87,6 +87,30 @@ func (sui *exthdrEncoderTestSuite) Test_ExthdrExistsAccept_WithAliases() {
 				},
 			},
 			expected: "exthdr dst exists exthdr frag exists accept",
+		},
+		{
+			name: "exthdr dst exists exthdr frag exists exthdr mh exists accept",
+			exprs: nftables.Rule{
+				Exprs: []expr.Any{
+					&expr.Exthdr{
+						Type:  unix.IPPROTO_DSTOPTS,
+						Flags: unix.NFT_EXTHDR_F_PRESENT,
+					},
+					&expr.Exthdr{
+						Type:  unix.IPPROTO_FRAGMENT,     // frag
+						Flags: unix.NFT_EXTHDR_F_PRESENT, 
+					},
+					&expr.Exthdr{
+						Type:  unix.IPPROTO_MH,           // mh
+						Flags: unix.NFT_EXTHDR_F_PRESENT, 
+					},
+
+					&expr.Verdict{
+						Kind: expr.VerdictAccept,
+					},
+				},
+			},
+			expected: "exthdr dst exists exthdr frag exists exthdr mh exists accept",
 		},
 	}
 
